@@ -1,0 +1,32 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+.env
+
+# IDE
+.vscode/
+.idea/
+
+# Data + logs (large, regeneratable)
+data/raw/*.json
+data/calibrated/*.json
+data/final/*.json
+data/sanity/*.json
+logs/*.log
+logs/*.txt
+
+# HF / model cache
+.cache/
+*.pt
+*.safetensors
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Keep schema files
+!data/**/.gitkeep
+!data/**/SCHEMA.md
