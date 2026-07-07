@@ -10,15 +10,26 @@ venv/
 .vscode/
 .idea/
 
-# Data + logs (large, regeneratable)
-data/raw/*.json
-data/calibrated/*.json
-data/final/*.json
-data/sanity/*.json
-logs/*.log
-logs/*.txt
+# Large artifacts (regeneratable)
+models/
+logs/
+figures/
+data/raw/
+data/calibrated/
+data/calibrated_full/
+data/spark_full/
+data/spark_full_last/
+data/analysis/
+data/steering/
+data/gsm8k/
+data/math500/
+data/external/
+tmp_*
+*.jsonl
+!data/sanity/*.jsonl
+!data/final/SCHEMA.md
 
-# HF / model cache
+# Checkpoints
 .cache/
 *.pt
 *.safetensors
@@ -27,6 +38,6 @@ logs/*.txt
 .DS_Store
 Thumbs.db
 
-# Keep schema files
+# Keep schema placeholders
 !data/**/.gitkeep
 !data/**/SCHEMA.md

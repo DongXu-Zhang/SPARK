@@ -1,0 +1,110 @@
+# Per-model launch parameters.
+# Used by scripts/serve_*.sh and src/calibration/run_eval.py.
+#
+# Two ID schemes are supported:
+#   - modelscope_id: pulled by scripts/download_models.sh
+#   - local_path:    where the weights end up after download (vLLM loads this)
+#
+# At runtime the loader prefers `local_path` if it exists, otherwise falls
+# back to `modelscope_id` (which triggers VLLM_USE_MODELSCOPE=True).
+#
+# The `${MODELS_DIR}` token is expanded from the env var of the same name.
+# Set it on the server, e.g.:   export MODELS_DIR=/data/models
+
+# === 2x3090 pool (default) ===
+
+Qwen3-0.6B:
+  modelscope_id: Qwen/Qwen3-0.6B
+  local_path: ${MODELS_DIR}/Qwen3-0.6B
+  tensor_parallel_size: 1
+  max_model_len: 16384
+  dtype: bfloat16
+  gpu_memory_utilization: 0.85
+
+Qwen3-1.7B:
+  modelscope_id: Qwen/Qwen3-1.7B
+  local_path: ${MODELS_DIR}/Qwen3-1.7B
+  tensor_parallel_size: 1
+  max_model_len: 16384
+  dtype: bfloat16
+  gpu_memory_utilization: 0.85
+
+Qwen3-4B:
+  modelscope_id: Qwen/Qwen3-4B
+  local_path: ${MODELS_DIR}/Qwen3-4B
+  tensor_parallel_size: 1
+  max_model_len: 16384
+  dtype: bfloat16
+  gpu_memory_utilization: 0.85
+
+Qwen3-8B:
+  modelscope_id: Qwen/Qwen3-8B
+  local_path: ${MODELS_DIR}/Qwen3-8B
+  tensor_parallel_size: 1
+  max_model_len: 12288
+  dtype: bfloat16
+  gpu_memory_utilization: 0.90
+
+Qwen3-14B-AWQ:
+  modelscope_id: Qwen/Qwen3-14B-AWQ
+  local_path: ${MODELS_DIR}/Qwen3-14B-AWQ
+  tensor_parallel_size: 1
+  max_model_len: 12288
+  dtype: float16
+  quantization: awq
+  gpu_memory_utilization: 0.90
+
+DSR1-Distill-Qwen-7B:
+  modelscope_id: deepseek-ai/DeepSeek-R1-Distill-Qwen-7B
+  local_path: ${MODELS_DIR}/DSR1-Distill-Qwen-7B
+  tensor_parallel_size: 1
+  max_model_len: 16384
+  dtype: bfloat16
+  gpu_memory_utilization: 0.90
+  # R1-Distill emits long <think> traces; allow more output budget
+  max_tokens_override: 6144
+
+Qwen3-32B-AWQ:
+  modelscope_id: Qwen/Qwen3-32B-AWQ
+  local_path: ${MODELS_DIR}/Qwen3-32B-AWQ
+  tensor_parallel_size: 2
+  max_model_len: 8192
+  dtype: float16
+  quantization: awq
+  gpu_memory_utilization: 0.90
+
+# === 4x3090 extension (uncomment in default.yaml to enable) ===
+
+Qwen3-32B:
+  modelscope_id: Qwen/Qwen3-32B
+  local_path: ${MODELS_DIR}/Qwen3-32B
+  tensor_parallel_size: 4
+  max_model_len: 12288
+  dtype: bfloat16
+  gpu_memory_utilization: 0.85
+
+DSR1-Distill-Qwen-32B:
+  modelscope_id: deepseek-ai/DeepSeek-R1-Distill-Qwen-32B
+  local_path: ${MODELS_DIR}/DSR1-Distill-Qwen-32B
+  tensor_parallel_size: 4
+  max_model_len: 12288
+  dtype: bfloat16
+  gpu_memory_utilization: 0.85
+  max_tokens_override: 6144
+
+# === MATH-500 extra models (local weights under models/) ===
+
+Llama-3.1-8B:
+  local_path: ${MODELS_DIR}/Llama-3.1-8B
+  tensor_parallel_size: 1
+  max_model_len: 16384
+  dtype: bfloat16
+  gpu_memory_utilization: 0.90
+
+deepseek-R1:
+  local_path: ${MODELS_DIR}/deepseek-R1
+  tensor_parallel_size: 1
+  max_model_len: 16384
+  dtype: bfloat16
+  gpu_memory_utilization: 0.90
+  max_tokens_override: 8192

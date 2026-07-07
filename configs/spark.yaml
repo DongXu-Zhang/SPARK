@@ -1,0 +1,23 @@
+# SPARK / χ / Φ configuration.
+#
+# All defaults are tuned for Qwen3-4B (36 transformer layers, hidden dim 2560)
+# on a 24 GB RTX 3090 with bfloat16. Reduce K if you OOM.
+
+chi:
+  K: 8                      # number of perturbations (K+1 forwards per problem)
+  epsilon: 0.01             # noise scale relative to embedding norm
+  layers: null              # null = probe all transformer layers
+  pool: mean                # mean | last | first
+  seed: 42
+  use_attention_mask: true
+
+phi:
+  layers: null              # null = use all layers (consecutive cosine)
+  pool: mean
+  use_attention_mask: true
+
+# SPK = log(chi) + lambda * phi
+lambda: 1.0
+
+# Which χ aggregator goes into SPK: "max" (over layers) or "mean".
+chi_aggregator: max

@@ -1,0 +1,22 @@
+# Diagnostic SPARK configuration using last-token pooling.
+#
+# Use this to test whether mean pooling over long prompts is suppressing chi
+# on harder examples. It is intentionally identical to configs/spark.yaml
+# except for pool=last.
+
+chi:
+  K: 8
+  epsilon: 0.01
+  layers: null
+  pool: last
+  seed: 42
+  use_attention_mask: true
+
+phi:
+  layers: null
+  pool: last
+  use_attention_mask: true
+
+lambda: 1.0
+chi_aggregator: max
+

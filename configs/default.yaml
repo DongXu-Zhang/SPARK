@@ -1,0 +1,91 @@
+# FRONTIER-1.5K main configuration
+
+paths:
+  raw_dir: data/raw
+  calibrated_dir: data/calibrated
+  final_dir: data/final
+  sanity_dir: data/sanity
+  logs_dir: logs
+
+generation:
+  n_candidates_per_domain: 1500    # over-sample for selection
+  n_final_per_domain: 500          # final set per domain
+  n_difficulty_bins: 5             # for stratified sampling
+  n_per_bin: 100                   # 5 bins x 100 = 500 per domain
+  seed_base: 100000
+
+  domains:
+    symbolic_compose:
+      enabled: true
+      max_n_steps: 7
+      value_ranges: [20, 50, 100, 200, 500]
+    logical_inference:
+      enabled: true
+      max_depth: 6
+      max_distractors: 12
+    algorithmic_reasoning:
+      enabled: true
+      max_nodes: 25
+      max_density: 0.7
+
+calibration:
+  models:
+    # 2x3090 pool (default). See configs/models.yaml for launch details.
+    - name: Qwen3-0.6B
+      hf_id: Qwen/Qwen3-0.6B
+      tp: 1
+    - name: Qwen3-1.7B
+      hf_id: Qwen/Qwen3-1.7B
+      tp: 1
+    - name: Qwen3-4B
+      hf_id: Qwen/Qwen3-4B
+      tp: 1
+    - name: Qwen3-8B
+      hf_id: Qwen/Qwen3-8B
+      tp: 1
+    - name: Qwen3-14B-AWQ
+      hf_id: Qwen/Qwen3-14B-AWQ
+      tp: 1
+      quantization: awq
+    - name: DSR1-Distill-Qwen-7B
+      hf_id: deepseek-ai/DeepSeek-R1-Distill-Qwen-7B
+      tp: 1
+    - name: Qwen3-32B-AWQ
+      hf_id: Qwen/Qwen3-32B-AWQ
+      tp: 2
+      quantization: awq
+
+  sampling:
+    # Generation hyperparameters.
+    temperature: 0.0
+    seed: 42
+    repetition_penalty: 1.05         # break decoder loops on graph problems
+
+    # Adaptive token budget (recommended). When True, each prompt gets a
+    # per-problem max_tokens estimated from its structural parameters
+    # (see src/calibration/token_budget.py). Set False to use a fixed
+    # `max_tokens` value for ablation runs.
+    dynamic_max_tokens: true
+    max_tokens_floor: 1024           # don't go below this even for trivial problems
+    max_tokens_ceiling: 12288        # KV-cache safety cap
+    max_tokens: 4096                 # used only when dynamic_max_tokens=False
+
+    # Engine context window. Must be >= ceiling + reasonable prompt length.
+    # Qwen3 supports 32K natively; we use 16K as a balance with KV cache size.
+    max_model_len: 16384
+    context_margin_tokens: 32        # reserved so prompt + generation fits context
+
+    # vLLM concurrency cap. Default 256 OOMs the KV cache when max_tokens is
+    # large; 16 keeps total KV reservation manageable on 2x24GB cards.
+    max_num_seqs: 16
+
+    # Disable cudagraph capture if you see OOM during warmup. Slightly
+    # slower but uses less GPU memory.
+    enforce_eager: false
+
+  batch_size: 64
+
+difficulty:
+  alpha: 0.5      # weight on d_structural
+  beta: 0.5       # weight on d_empirical
+  normalize: rank # 'rank' (uniform) or 'minmax'

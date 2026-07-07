@@ -20,21 +20,12 @@ sys.path.insert(0, str(ROOT))
 
 from src.calibration.math_grade import extract_math_answer  # noqa: E402
 from src.calibration.verify import extract_answer, verify  # noqa: E402
-from src.datasets.gsm8k import format_gsm8k_prompt, strip_gsm8k_prompt_suffix  # noqa: E402
-from src.datasets.math500 import format_math500_prompt, strip_math_prompt_suffix  # noqa: E402
 from src.steering.activation import (  # noqa: E402
     add_steering_hook,
     format_prompt,
     load_hf_model_and_tokenizer,
 )
 from src.utils.io import append_jsonl, load_jsonl, save_jsonl  # noqa: E402
-
-# Official Qwen3 non-thinking MATH-500 targets (Table 18 / Table 20, tech report).
-OFFICIAL_MATH500_TARGETS = {
-    "Qwen3-0.6B": 0.552,
-    "Qwen3-4B": 0.848,
-    "Qwen3-8B": 0.874,
-}
 
 
 def _alpha_metrics(rows: list[dict]) -> dict:
@@ -141,21 +132,12 @@ def _question_seed(base_seed: int | None, record_id: str) -> int | None:
 
 
 def _default_presence_penalty(model_path: str, prompt_style: str) -> float:
-    """HF-friendly presence penalty defaults.
-
-    Official Qwen3 non-thinking uses 1.5 on vLLM/API. On HF ``generate()``, 1.5
-    inflates outputs and can collapse small models; MATH-500 HF eval uses 0 for all
-    sizes (repeat-window stopping handles loops). Override via ``--presence_penalty``.
-    """
-    if prompt_style not in ("math500_official", "math500"):
-        return 0.0
+    """HF-friendly presence penalty defaults for FRONTIER steering eval."""
     return 0.0
 
 
 def _default_max_new_tokens(model_path: str, prompt_style: str) -> int:
-    """Context budget: edge models rarely need 32k; 4B/8B keep official 32768."""
-    if prompt_style not in ("math500_official", "math500"):
-        return 32768
+    """Context budget for FRONTIER graph / reasoning prompts."""
     name = Path(model_path).name.lower()
     if "0.6b" in name:
         return 8192
@@ -165,17 +147,7 @@ def _default_max_new_tokens(model_path: str, prompt_style: str) -> int:
 
 
 def _default_no_system_prompt(model_path: str, prompt_style: str) -> bool:
-    """Whether to omit the extra system message (user-only chat template).
-
-    EvalScope official MATH-500 is user-only, but HF ablations showed:
-    - Qwen3-0.6B: user-only aligns better with the tech-report baseline
-    - Qwen3-4B/8B: DEFAULT_SYSTEM (+2–3 pp vs user-only at alpha=0)
-    """
-    if prompt_style not in ("math500_official", "math500"):
-        return False
-    name = Path(model_path).name.lower()
-    if "0.6b" in name:
-        return True
+    """Whether to omit the extra system message (user-only chat template)."""
     return False
 
 
@@ -192,7 +164,7 @@ def _apply_eval_profile(args) -> None:
         args.repetition_penalty = 1.0
         args.with_system_prompt = False
         args.no_system_prompt = _default_no_system_prompt(
-            args.model_path, getattr(args, "prompt_style", "math500_official")
+            args.model_path, getattr(args, "prompt_style", "default")
         )
         if args.presence_penalty is None:
             args.presence_penalty = 0.0
@@ -241,27 +213,6 @@ def build_eval_problem_text(
     concise: bool = False,
     prompt_style: str = "default",
 ) -> str:
-    if prompt_style in ("math500", "math500_official"):
-        return format_math500_prompt(problem_text)
-    if prompt_style in ("gsm8k", "gsm8k_official"):
-        return format_gsm8k_prompt(problem_text)
-    if prompt_style == "gsm8k_legacy":
-        return (
-            f"{strip_gsm8k_prompt_suffix(problem_text)}\n\n"
-            "Important:\n"
-            "- Show concise step-by-step reasoning.\n"
-            "- End with exactly one line: \\boxed{integer}.\n"
-            "- The value inside \\boxed{} must be the final integer only."
-        )
-    if prompt_style == "math500_legacy":
-        return (
-            f"{strip_math_prompt_suffix(problem_text)}\n\n"
-            "Important:\n"
-            "- Show step-by-step reasoning.\n"
-            "- End with exactly one line: \\boxed{answer}.\n"
-            "- The value inside \\boxed{} must be only the final answer "
-            "(number, fraction, or expression)."
-        )
     if not concise:
         return problem_text
     return (
@@ -343,7 +294,7 @@ def generate_one(
         gen_kw["logits_processor"] = LogitsProcessorList(
             [_PresencePenaltyLogitsProcessor(presence_penalty, n_prompt_tokens)]
         )
-    if prompt_style in ("math500_official", "math500"):
+    if concise_prompt:
         from transformers import StoppingCriteriaList
 
         repeat_stop = _RepeatWindowStoppingCriteria(n_prompt_tokens)
@@ -461,7 +412,7 @@ def main() -> int:
         "--max_new_tokens",
         type=int,
         default=None,
-        help="Max new tokens per problem. Default: 8192 (0.6B) / 32768 (4B/8B) for MATH-500.",
+        help="Max new tokens per problem. Default scales with model size.",
     )
     ap.add_argument("--dtype", default="bfloat16", choices=["bfloat16", "float16", "float32"])
     ap.add_argument("--device_map", default="auto")
@@ -476,27 +427,26 @@ def main() -> int:
     ap.add_argument(
         "--prompt_style",
         default="default",
-        choices=["default", "gsm8k", "gsm8k_official", "gsm8k_legacy", "math500", "math500_official", "math500_legacy"],
-        help="Prompt style. gsm8k/gsm8k_official and math500/math500_official = EvalScope prompts.",
+        choices=["default"],
+        help="Prompt style for FRONTIER steering eval.",
     )
     ap.add_argument("--enable_thinking", action="store_true",
                     help="Enable Qwen3 thinking mode. Default off (official non-thinking).")
     ap.add_argument(
         "--no_system_prompt",
         action="store_true",
-        help="Force user-only chat template (no extra system). "
-        "Default for math500_official: True on Qwen3-0.6B, False on 4B/8B.",
+        help="Force user-only chat template (no extra system message).",
     )
     ap.add_argument(
         "--with_system_prompt",
         action="store_true",
-        help="Force default system message even for math500_official.",
+        help="Force default system message in the chat template.",
     )
     ap.add_argument(
         "--temperature",
         type=float,
         default=0.7,
-        help="Sampling temperature. Official Qwen3 non-thinking MATH-500 uses 0.7; 0 = greedy.",
+        help="Sampling temperature. Default 0.7; 0 = greedy.",
     )
     ap.add_argument(
         "--top_p",
@@ -525,14 +475,13 @@ def main() -> int:
         "--repetition_penalty",
         type=float,
         default=1.0,
-        help="HF generate repetition_penalty (1.0 disables). Official MATH-500 uses 1.0.",
+        help="HF generate repetition_penalty (1.0 disables).",
     )
     ap.add_argument(
         "--presence_penalty",
         type=float,
         default=None,
-        help="Presence penalty (official Qwen3 non-thinking MATH-500: 1.5). "
-        "Default: 1.5 for math500_official, else 0.",
+        help="Presence penalty for HF generate(). Default: 0.",
     )
     ap.add_argument(
         "--eval_profile",
@@ -571,14 +520,8 @@ def main() -> int:
     if args.max_new_tokens is None:
         args.max_new_tokens = _default_max_new_tokens(args.model_path, args.prompt_style)
 
-    # MATH-500: model-aware system prompt (see _default_no_system_prompt).
-    if args.prompt_style in ("math500_official", "math500"):
-        if args.with_system_prompt:
-            args.no_system_prompt = False
-        elif args.no_system_prompt:
-            pass  # explicit --no_system_prompt
-        else:
-            args.no_system_prompt = _default_no_system_prompt(args.model_path, args.prompt_style)
+    if args.with_system_prompt:
+        args.no_system_prompt = False
 
     print(
         f"[eval-steering] sampling: temp={args.temperature} top_p={args.top_p} top_k={args.top_k} "
@@ -770,17 +713,6 @@ def main() -> int:
         summary[str(alpha)] = _alpha_metrics(subset)
 
     model_name = Path(args.model_path).name
-    if model_name in OFFICIAL_MATH500_TARGETS and any(float(a) == 0.0 for a in args.alphas):
-        key = "0.0" if "0.0" in summary else "0"
-        a0 = summary.get(key)
-        if a0 and a0.get("acc") is not None:
-            target = OFFICIAL_MATH500_TARGETS[model_name]
-            got = float(a0["acc"])
-            print(
-                f"[eval-steering] baseline vs Qwen3 report: {got:.1%} "
-                f"(target non-thinking MATH-500 {target:.1%}, delta {100*(got-target):+.1f}pp)",
-                flush=True,
-            )
 
     meta = {
         "args": vars(args),
